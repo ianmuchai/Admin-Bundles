@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS sessions (
+  id SERIAL PRIMARY KEY,
+  user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  bundle_id INT NOT NULL REFERENCES bundles(id) ON DELETE CASCADE,
+  expires_at TIMESTAMP NOT NULL,
+  status VARCHAR(20) DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id, status)
+);
