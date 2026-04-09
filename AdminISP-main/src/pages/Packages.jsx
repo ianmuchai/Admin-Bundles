@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { 
   Package, Plus, Sparkles, BookOpen, Search, 
-  Layers, Wifi, Radio, Database, Gift, ChevronDown, X 
+  Layers, Wifi, Radio, Database, Gift, ChevronDown, X, Pencil, Trash2
 } from "lucide-react";
 import { packagesAPI } from "../services/api";
 
@@ -12,6 +12,7 @@ export default function Packages() {
   const [tabCounts, setTabCounts] = useState({ All: 0, Hotspot: 0, PPPOE: 0, "Data Plans": 0, "Free Trial": 0 });
   const [activeTab, setActiveTab] = useState("All");
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [editingPackage, setEditingPackage] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [formData, setFormData] = useState({
@@ -34,8 +35,8 @@ export default function Packages() {
       const params = {};
       if (activeTab !== "All") params.type = activeTab;
       if (searchQuery.trim()) params.search = searchQuery.trim();
-      const data = await packagesAPI.list(params);
-      setPackages(data.packages || data || []);
+      const { data } = await packagesAPI.list(params);
+      setPackages(data.packages || data.data || []);
     } catch (err) {
       setError(err.message || "Failed to load packages");
     } finally {
@@ -45,7 +46,7 @@ export default function Packages() {
 
   const fetchCounts = useCallback(async () => {
     try {
-      const data = await packagesAPI.getCounts();
+      const { data } = await packagesAPI.getCounts();
       setTabCounts(data);
     } catch {}
   }, []);
@@ -55,6 +56,64 @@ export default function Packages() {
 
   const handleFormChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const resetForm = () => {
+    setFormData({ name: "", type: "Fixed (PPPoE/Static/DHCP)", uploadSpeed: "", downloadSpeed: "", burst: false, period: "", unit: "Hour(s)", price: "" });
+    setEditingPackage(null);
+  };
+
+  const openEditDrawer = (pkg) => {
+    setEditingPackage(pkg);
+    setFormData({
+      name: pkg.name,
+      type: pkg.type,
+      uploadSpeed: pkg.uploadSpeed || "",
+      downloadSpeed: pkg.downloadSpeed || "",
+      burst: pkg.burst || false,
+      period: pkg.period || "",
+      unit: pkg.unit || "Hour(s)",
+      price: pkg.price || "",
+    });
+    setIsDrawerOpen(true);
+  };
+
+  const handleUpdatePackage = async () => {
+    if (!formData.name.trim() || !formData.uploadSpeed || !formData.downloadSpeed || !formData.period || !formData.price) {
+      alert("Please fill in all required fields");
+      return;
+    }
+    try {
+      await packagesAPI.update(editingPackage.id, {
+        name: formData.name,
+        type: formData.type,
+        upload_speed: parseFloat(formData.uploadSpeed),
+        download_speed: parseFloat(formData.downloadSpeed),
+        burst: formData.burst,
+        period: parseFloat(formData.period),
+        unit: formData.unit,
+        price: parseFloat(formData.price),
+      });
+      await Promise.all([fetchPackages(), fetchCounts()]);
+      resetForm();
+      setIsDrawerOpen(false);
+      setSuccessMessage(`Package "${formData.name}" updated successfully!`);
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err) {
+      alert(err.message || "Failed to update package");
+    }
+  };
+
+  const handleDeletePackage = async (pkg) => {
+    if (!window.confirm(`Delete package "${pkg.name}"? This cannot be undone.`)) return;
+    try {
+      await packagesAPI.delete(pkg.id);
+      await Promise.all([fetchPackages(), fetchCounts()]);
+      setSuccessMessage(`Package "${pkg.name}" deleted.`);
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err) {
+      alert(err.message || "Failed to delete package");
+    }
   };
 
   const handleCreatePackage = async () => {
@@ -83,17 +142,7 @@ export default function Packages() {
         price: parseFloat(formData.price),
       });
       await Promise.all([fetchPackages(), fetchCounts()]);
-
-      setFormData({
-        name: "",
-        type: "Fixed (PPPoE/Static/DHCP)",
-        uploadSpeed: "",
-        downloadSpeed: "",
-        burst: false,
-        period: "",
-        unit: "Hour(s)",
-        price: "",
-      });
+      resetForm();
       setIsDrawerOpen(false);
       setSuccessMessage(`Package "${formData.name}" created successfully!`);
       setTimeout(() => setSuccessMessage(""), 3000);
@@ -119,7 +168,7 @@ export default function Packages() {
           
           <div className="flex flex-wrap gap-3">
             <button 
-              onClick={() => setIsDrawerOpen(true)}
+              onClick={() => { resetForm(); setIsDrawerOpen(true); }}
               className="flex items-center gap-2 bg-[#009DFF] hover:bg-[#0077cc] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-lg shadow-blue-500/20"
             >
               <Package size={16} /> Create Package
@@ -162,6 +211,7 @@ export default function Packages() {
                     <th className="px-6 py-4">Time <ChevronDown size={14} className="inline ml-1 opacity-50"/></th>
                     <th className="px-6 py-4">Type <ChevronDown size={14} className="inline ml-1 opacity-50"/></th>
                     <th className="px-6 py-4 text-center">Enabled</th>
+                    <th className="px-6 py-4 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -210,6 +260,24 @@ export default function Packages() {
                             {pkg.enabled ? "Yes" : "No"}
                           </span>
                         </td>
+                        <td className="px-6 py-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => openEditDrawer(pkg)}
+                              title="Edit package"
+                              className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                            >
+                              <Pencil size={15} />
+                            </button>
+                            <button
+                              onClick={() => handleDeletePackage(pkg)}
+                              title="Delete package"
+                              className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -240,6 +308,10 @@ export default function Packages() {
                       <div>
                         <div className="font-semibold text-gray-800 dark:text-white text-sm">{pkg.name}</div>
                         <div className="text-xs text-gray-500 dark:text-gray-400">Kshs {pkg.price}</div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => openEditDrawer(pkg)} className="p-1 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"><Pencil size={13} /></button>
+                        <button onClick={() => handleDeletePackage(pkg)} className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"><Trash2 size={13} /></button>
                       </div>
                       <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
                         pkg.type === "PPPOE"
@@ -295,14 +367,14 @@ export default function Packages() {
 
       {/* --- NEW PACKAGE DRAWER --- */}
       {isDrawerOpen && (
-        <div className="fixed inset-0 bg-black/40 z-40 animate-in fade-in" onClick={() => setIsDrawerOpen(false)} />
+        <div className="fixed inset-0 bg-black/40 z-40 animate-in fade-in" onClick={() => { setIsDrawerOpen(false); resetForm(); }} />
       )}
 
       <div className={`fixed top-0 right-0 h-full w-full sm:w-96 md:max-w-sm bg-white dark:bg-[#000a00] z-50 shadow-2xl transform transition-transform duration-300 ease-in-out ${isDrawerOpen ? "translate-x-0" : "translate-x-full"}`}>
         <div className="flex flex-col h-full">
           <div className="p-3 sm:p-4 md:p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
-            <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white">New Package</h2>
-            <button onClick={() => setIsDrawerOpen(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white">{editingPackage ? "Edit Package" : "New Package"}</h2>
+            <button onClick={() => { setIsDrawerOpen(false); resetForm(); }} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full">
               <X size={20} className="text-gray-500" />
             </button>
           </div>
@@ -394,16 +466,16 @@ export default function Packages() {
 
           <div className="p-3 sm:p-4 md:p-6 border-t border-gray-100 dark:border-gray-800 grid grid-cols-2 gap-2 sm:gap-3 md:gap-4">
             <button 
-              onClick={() => setIsDrawerOpen(false)} 
+              onClick={() => { setIsDrawerOpen(false); resetForm(); }} 
               className="py-2 sm:py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 transition-all"
             >
               Cancel
             </button>
             <button 
-              onClick={handleCreatePackage}
+              onClick={editingPackage ? handleUpdatePackage : handleCreatePackage}
               className="py-2 sm:py-2.5 rounded-lg bg-[#009DFF] text-white text-xs sm:text-sm font-bold hover:bg-[#0077cc] shadow-lg shadow-blue-500/20 transition-all"
             >
-              Create
+              {editingPackage ? "Save Changes" : "Create"}
             </button>
           </div>
         </div>
