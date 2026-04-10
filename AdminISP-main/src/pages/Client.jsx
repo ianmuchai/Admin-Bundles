@@ -3,7 +3,7 @@ import {
   Plus, ChevronDown, Search, Users, 
   UserMinus, FileUp, FileDown, MousePointerClick, X
 } from "lucide-react";
-import { clientsAPI } from "../services/api";
+import { clientsAPI, packagesAPI } from "../services/api";
 
 export default function Clients() {
   const [clients, setClients] = useState([]);
@@ -19,6 +19,7 @@ export default function Clients() {
   const [filterStatus, setFilterStatus] = useState("All Statuses");
   const [filterConnection, setFilterConnection] = useState("All Connections");
   const [filterPackage, setFilterPackage] = useState("All Packages");
+  const [availablePackages, setAvailablePackages] = useState([]);
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -60,6 +61,13 @@ export default function Clients() {
     } catch {}
   }, []);
 
+  const fetchPackages = useCallback(async () => {
+    try {
+      const { data } = await packagesAPI.list();
+      setAvailablePackages(data.packages || data.data || (Array.isArray(data) ? data : []));
+    } catch {}
+  }, []);
+
   useEffect(() => {
     fetchClients();
   }, [fetchClients]);
@@ -67,6 +75,10 @@ export default function Clients() {
   useEffect(() => {
     fetchCounts();
   }, [fetchCounts]);
+
+  useEffect(() => {
+    fetchPackages();
+  }, [fetchPackages]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -443,7 +455,10 @@ export default function Clients() {
                   onChange={(e) => handleFormChange("package", e.target.value)}
                   className="w-full appearance-none bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-[#009DFF]/30 dark:text-white"
                 >
-                  <option>Select...</option>
+                  <option value="">Select...</option>
+                  {availablePackages.map((pkg) => (
+                    <option key={pkg.id} value={pkg.name}>{pkg.name} — Kshs {pkg.price}</option>
+                  ))}
                 </select>
                 <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
               </div>

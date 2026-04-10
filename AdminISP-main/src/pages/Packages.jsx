@@ -36,7 +36,7 @@ export default function Packages() {
       if (activeTab !== "All") params.type = activeTab;
       if (searchQuery.trim()) params.search = searchQuery.trim();
       const { data } = await packagesAPI.list(params);
-      setPackages(data.packages || data.data || []);
+      setPackages(data.packages || data.data || (Array.isArray(data) ? data : []));
     } catch (err) {
       setError(err.message || "Failed to load packages");
     } finally {
