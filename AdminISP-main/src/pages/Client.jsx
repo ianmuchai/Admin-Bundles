@@ -393,7 +393,6 @@ export default function Clients() {
             <FormInput 
               label="Old Username" 
               placeholder="JaneDoe" 
-              required 
               value={formData.oldUsername}
               onChange={(e) => handleFormChange("oldUsername", e.target.value)}
             />
@@ -401,6 +400,7 @@ export default function Clients() {
               label="Secret" 
               placeholder="password" 
               type="password"
+              required
               value={formData.secret}
               onChange={(e) => handleFormChange("secret", e.target.value)}
             />
