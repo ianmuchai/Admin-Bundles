@@ -16,8 +16,8 @@ const LeadsPage = () => {
     try {
       const params = {};
       if (searchTerm.trim()) params.search = searchTerm.trim();
-      const data = await leadsAPI.list(params);
-      setLeads(data.leads || data || []);
+      const { data } = await leadsAPI.list(params);
+      setLeads(data.data || data.leads || []);
     } catch (err) {
       setError(err.message || 'Failed to load leads');
     } finally {

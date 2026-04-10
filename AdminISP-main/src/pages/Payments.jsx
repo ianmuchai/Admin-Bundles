@@ -31,8 +31,8 @@ export default function Payments() {
     try {
       const params = { status: activeTab };
       if (searchQuery.trim()) params.search = searchQuery.trim();
-      const data = await paymentsAPI.list(params);
-      setPayments(data.payments || data || []);
+      const { data } = await paymentsAPI.list(params);
+      setPayments(data.payments || data.data || []);
     } catch (err) {
       setError(err.message || "Failed to load payments");
     } finally {
@@ -42,8 +42,8 @@ export default function Payments() {
 
   const fetchEarnings = useCallback(async () => {
     try {
-      const data = await paymentsAPI.getEarnings();
-      setEarnings(data);
+      const { data } = await paymentsAPI.getEarnings();
+      setEarnings(data && typeof data === 'object' ? data : { hourly: 0, daily: 0, weekly: 0, monthly: 0 });
     } catch {}
   }, []);
 

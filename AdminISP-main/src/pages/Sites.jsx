@@ -38,8 +38,8 @@ export default function Sites() {
       const params = {};
       if (activeTab === "operational") params.tab = "operational";
       if (searchQuery.trim()) params.search = searchQuery.trim();
-      const data = await sitesAPI.list(params);
-      const rows = (data.sites || data || []).map(s => ({
+      const { data } = await sitesAPI.list(params);
+      const rows = (data.sites || data.data || []).map(s => ({
         ...s,
         boardName: s.board_name || s.boardName,
         remoteWinbox: s.remote_winbox || s.remoteWinbox || "-",

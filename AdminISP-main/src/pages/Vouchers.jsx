@@ -37,8 +37,8 @@ export default function Vouchers() {
     try {
       const params = {};
       if (searchQuery.trim()) params.search = searchQuery.trim();
-      const data = await vouchersAPI.list(params);
-      setVouchers(data.vouchers || data || []);
+      const { data } = await vouchersAPI.list(params);
+      setVouchers(data.vouchers || data.data || []);
     } catch (err) {
       setError(err.message || "Failed to load vouchers");
     } finally {
@@ -48,8 +48,8 @@ export default function Vouchers() {
 
   const fetchPackages = useCallback(async () => {
     try {
-      const data = await packagesAPI.list();
-      setAvailablePackages(data.packages || data || []);
+      const { data } = await packagesAPI.list();
+      setAvailablePackages(data.packages || data || [])
     } catch {}
   }, []);
 
@@ -77,7 +77,7 @@ export default function Vouchers() {
       if (formData.package_id) payload.package_id = formData.package_id;
       else if (formData.package) payload.package_name = formData.package;
 
-      const result = await vouchersAPI.generate(payload);
+      const { data: result } = await vouchersAPI.generate(payload);
       setGeneratedCodes(result.codes || []);
       await fetchVouchers();
       setFormData({ package_id: "", package: "", quantity: 1 });

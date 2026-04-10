@@ -30,8 +30,8 @@ export default function Tickets() {
     try {
       const params = { status: activeTab };
       if (searchQuery.trim()) params.search = searchQuery.trim();
-      const data = await ticketsAPI.list(params);
-      setTickets(data.tickets || data || []);
+      const { data } = await ticketsAPI.list(params);
+      setTickets(data.tickets || data.data || []);
     } catch (err) {
       setError(err.message || "Failed to load tickets");
     } finally {
@@ -41,7 +41,7 @@ export default function Tickets() {
 
   const fetchCounts = useCallback(async () => {
     try {
-      const data = await ticketsAPI.getCounts();
+      const { data } = await ticketsAPI.getCounts();
       setOpenCount(data.open || 0);
       setClosedCount(data.closed || 0);
     } catch {}
@@ -49,8 +49,8 @@ export default function Tickets() {
 
   const fetchCustomers = useCallback(async () => {
     try {
-      const data = await clientsAPI.list({ limit: 200 });
-      setCustomers((data.clients || data || []).map(c => ({ id: c.id, username: c.username, name: c.name })));
+      const { data } = await clientsAPI.list({ limit: 200 });
+      setCustomers((data.clients || data.data || []).map(c => ({ id: c.id, username: c.username, name: c.name })));
     } catch {}
   }, []);
 

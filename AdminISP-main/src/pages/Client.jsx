@@ -44,8 +44,8 @@ export default function Clients() {
       if (searchQuery.trim()) params.search = searchQuery.trim();
       if (filterStatus !== "All Statuses") params.status = filterStatus;
       if (filterConnection !== "All Connections") params.connection = filterConnection;
-      const data = await clientsAPI.list(params);
-      setClients(data.clients || data || []);
+      const { data } = await clientsAPI.list(params);
+      setClients(data.clients || data.data || []);
     } catch (err) {
       setError(err.message || "Failed to load clients");
     } finally {
@@ -55,7 +55,7 @@ export default function Clients() {
 
   const fetchCounts = useCallback(async () => {
     try {
-      const data = await clientsAPI.getCounts();
+      const { data } = await clientsAPI.getCounts();
       setTabCounts(data);
     } catch {}
   }, []);
