@@ -436,14 +436,14 @@ export default function Clients() {
                 <select 
                   value={formData.connectionType}
                   onChange={(e) => handleFormChange("connectionType", e.target.value)}
-                  className="w-full appearance-none bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-[#009DFF]/30 dark:text-white"
+                  className="w-full appearance-none bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg p-2.5 pr-10 text-sm focus:ring-2 focus:ring-[#009DFF]/30 dark:text-white cursor-pointer"
                 >
                   <option>PPPoE</option>
                   <option>Static</option>
                   <option>DHCP</option>
                   <option>Hotspot</option>
                 </select>
-                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
             </div>
 
@@ -453,14 +453,14 @@ export default function Clients() {
                 <select 
                   value={formData.package}
                   onChange={(e) => handleFormChange("package", e.target.value)}
-                  className="w-full appearance-none bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-[#009DFF]/30 dark:text-white"
+                  className="w-full appearance-none bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg p-2.5 pr-10 text-sm focus:ring-2 focus:ring-[#009DFF]/30 dark:text-white cursor-pointer"
                 >
                   <option value="">Select...</option>
                   {availablePackages.map((pkg) => (
                     <option key={pkg.id} value={pkg.name}>{pkg.name} — Kshs {pkg.price}</option>
                   ))}
                 </select>
-                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
             </div>
 

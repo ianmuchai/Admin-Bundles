@@ -67,7 +67,7 @@ const LeadsPage = () => {
           {['Name', 'Email', 'Phone', 'Address'].map((header) => (
             <div key={header} className="flex items-center gap-1 text-sm font-semibold text-[#000a40] dark:text-gray-300">
               {header}
-              <ChevronDown size={14} className="text-gray-400 dark:text-gray-600 cursor-pointer" />
+              <ChevronDown size={14} className="text-gray-400 dark:text-gray-600 pointer-events-none" />
             </div>
           ))}
         </div>

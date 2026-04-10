@@ -393,7 +393,7 @@ export default function Packages() {
                 <select 
                   value={formData.type}
                   onChange={(e) => handleFormChange("type", e.target.value)}
-                  className="w-full appearance-none bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg p-2 sm:p-2.5 text-xs sm:text-sm dark:text-white"
+                  className="w-full appearance-none bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg p-2 sm:p-2.5 pr-10 text-xs sm:text-sm dark:text-white cursor-pointer"
                 >
                   <option>Fixed (PPPoE/Static/DHCP)</option>
                   <option>Hotspot</option>
@@ -444,7 +444,7 @@ export default function Packages() {
                   <select 
                     value={formData.unit}
                     onChange={(e) => handleFormChange("unit", e.target.value)}
-                    className="w-full appearance-none bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg p-2 sm:p-2.5 text-xs sm:text-sm dark:text-white"
+                    className="w-full appearance-none bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg p-2 sm:p-2.5 pr-10 text-xs sm:text-sm dark:text-white cursor-pointer"
                   >
                     <option>Hour(s)</option>
                     <option>Day(s)</option>
