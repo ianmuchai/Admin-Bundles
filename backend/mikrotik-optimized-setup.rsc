@@ -3,6 +3,25 @@
 # Multi-WAN Support (Starlink, 4G, Fiber)
 # RouterOS 6.x / 7.x Compatible
 # Integrated with Node.js Backend API
+# PORT PLAN:
+#   ether1 = WAN/ISP uplink
+#   ether2 = LAN port for first-time laptop setup
+#   ether3-ether5 = LAN ports for clients/switch/AP
+# FIRST LOGIN:
+#   1. Connect laptop by LAN cable to ether2
+#   2. Open Winbox or WebFig
+#   3. Run this script
+#   4. Router LAN IP becomes 192.168.100.1/24
+# REMOTE MANAGEMENT PORTS:
+#   8729/tcp = RouterOS API-SSL for backend
+#   8291/tcp = Winbox
+#   443/tcp  = WebFig HTTPS
+#   22/tcp   = SSH
+# REMOTE ACCESS OPTIONS ENABLED/PROVISIONED:
+#   1. MikroTik IP Cloud DDNS
+#   2. Restricted WinBox/SSH/WebFig/API-SSL from trusted IPs only
+#   3. Optional L2TP/IPsec VPN template
+#   4. Notes for Back to Home (BTH) support on compatible routers
 # ============================================================
 
 # ============================================================
@@ -10,9 +29,59 @@
 # ============================================================
 :log info ("Starting MikroTik Bundle Router Configuration...")
 
+# ============================================================
+# CONFIGURATION BLOCK - EDIT THESE VALUES BEFORE DEPLOYING
+# ============================================================
+:local routerName "BundleRouter-01"
+:local lanIp "192.168.100.1/24"
+:local lanGateway "192.168.100.1"
+:local dhcpPoolStart "192.168.100.10"
+:local dhcpPoolEnd "192.168.100.254"
+:local wifiName "Bundle-WiFi-01"
+:local wifiPassword "BundleWiFi2024"
+:local adminPassword "ChangeThisRouterAdminPassword!"
+:local apiUser "api-bundles"
+:local apiPassword "ChangeThisApiPasswordToo!"
+:local backendAllowedIp "203.0.113.10"
+:local adminAllowedIp "198.51.100.20"
+:local enableIpCloud true
+:local enableL2tpIpsec false
+:local l2tpIpsecSecret "ChangeThisVpnSecret!"
+:local l2tpUser "remotevpn"
+:local l2tpPassword "ChangeThisVpnPassword!"
+:local remoteAccessMode "basic"
+:local enableDualWan false
+:local wan1Interface "ether1"
+:local wan2Interface "lte1"
+:local lanBridge "bridge-local"
+:local lanPorts "ether2,ether3,ether4,ether5"
+
+# REMOTE ACCESS MODES:
+#   "basic"     = trusted public IPs can use WinBox, SSH, WebFig, API-SSL directly
+#   "vpn-first" = only VPN + API-SSL remain exposed on WAN; admin GUI/SSH stays LAN/VPN only
+#
+# WAN/LAN ASSUMPTIONS:
+#   WAN1 is expected on ether1 by default
+#   Laptop/initial setup is expected on ether2
+#   If your ISP hands off internet on another port, change wan1Interface before running
+#   If you use LTE/second ISP, set enableDualWan=true and confirm wan2Interface
+
+:local remoteAdminPorts "8291,443,22"
+:local apiSslPort "8729"
+
 # Set system identity
 /system identity
-set name="BundleRouter-01"
+set name=$routerName
+
+/user
+:if ([print count where name="admin"] > 0) do={
+    set [find where name="admin"] password=$adminPassword
+}
+:if ([print count where name=$apiUser] = 0) do={
+    add name=$apiUser password=$apiPassword group=full comment="Backend RouterOS API user"
+} else={
+    set [find where name=$apiUser] password=$apiPassword group=full
+}
 
 # ============================================================
 # PHASE 1: BRIDGE SETUP (Legacy WiFi Recovery)
@@ -21,53 +90,49 @@ set name="BundleRouter-01"
 
 # Create LAN bridge
 /interface bridge
-add name=bridge-local comment="Main LAN Bridge (WiFi + Wired)"
+add name=$lanBridge comment="Main LAN Bridge (WiFi + Wired)"
 
 # Add LAN ports to bridge ONE AT A TIME (fixes WiFi issues)
 /interface bridge port
-add bridge=bridge-local interface=ether3 comment="LAN Port 1"
-add bridge=bridge-local interface=ether4 comment="LAN Port 2"
-add bridge=bridge-local interface=ether5 comment="LAN Port 3"
+add bridge=$lanBridge interface=ether2 comment="Laptop/Primary LAN Port"
+add bridge=$lanBridge interface=ether3 comment="LAN Port 1"
+add bridge=$lanBridge interface=ether4 comment="LAN Port 2"
+add bridge=$lanBridge interface=ether5 comment="LAN Port 3"
 
 # Add WiFi to bridge if wlan0 exists
 /interface bridge port
-add bridge=bridge-local interface=wlan0 comment="WiFi Bridge" disabled=no
+add bridge=$lanBridge interface=wlan0 comment="WiFi Bridge" disabled=no
 
 # ============================================================
 # PHASE 2: MULTI-WAN CONFIGURATION
 # ============================================================
 
-# WAN 1: Primary (e.g., Starlink via ether2)
-/ip address
-add address=0.0.0.0/0 interface=ether2 comment="WAN1 - Primary (Starlink/Fiber)"
-
+# WAN 1: Primary (e.g., Starlink/Fiber/ISP modem)
 /ip dhcp-client
-add interface=ether2 disabled=no add-default-route=yes default-route-distance=1 \
+add interface=$wan1Interface disabled=no add-default-route=yes default-route-distance=1 \
     use-peer-dns=yes comment="WAN1 DHCP Client"
 
 # WAN 2: Secondary (e.g., 4G backup via USB or another port)
-# UNCOMMENT IF YOU HAVE DUAL WAN
-# /ip address
-# add address=0.0.0.0/0 interface=ether1 comment="WAN2 - Backup (4G/LTE)"
-# 
-# /ip dhcp-client
-# add interface=ether1 disabled=no add-default-route=yes default-route-distance=10 \
-#     use-peer-dns=no comment="WAN2 DHCP Client (Higher distance = backup)"
+:if ($enableDualWan = true) do={
+    /ip dhcp-client
+    add interface=$wan2Interface disabled=no add-default-route=yes default-route-distance=10 \
+        use-peer-dns=no comment="WAN2 DHCP Client (Higher distance = backup)"
+}
 
 # ============================================================
 # PHASE 3: LAN ADDRESSING
 # ============================================================
 /ip address
-add address=192.168.100.1/24 interface=bridge-local comment="LAN Gateway"
+add address=$lanIp interface=$lanBridge comment="LAN Gateway"
 
 /ip pool
-add name=dhcp-pool ranges=192.168.100.10-192.168.100.254
+add name=dhcp-pool ranges=($dhcpPoolStart . "-" . $dhcpPoolEnd)
 
 /ip dhcp-server
-add name=dhcp-local interface=bridge-local address-pool=dhcp-pool lease-time=1d disabled=no
+add name=dhcp-local interface=$lanBridge address-pool=dhcp-pool lease-time=1d disabled=no
 
 /ip dhcp-server network
-add address=192.168.100.0/24 gateway=192.168.100.1 dns-server=8.8.8.8,8.8.4.4
+add address=192.168.100.0/24 gateway=$lanGateway dns-server=$lanGateway,8.8.8.8,8.8.4.4
 
 # ============================================================
 # PHASE 4: NAT & MASQUERADE
@@ -75,10 +140,13 @@ add address=192.168.100.0/24 gateway=192.168.100.1 dns-server=8.8.8.8,8.8.4.4
 /ip firewall nat
 
 # Primary WAN NAT
-add chain=srcnat out-interface=ether2 action=masquerade comment="NAT - WAN1 (Primary)"
+add chain=srcnat out-interface=$wan1Interface action=masquerade comment="NAT - WAN1 (Primary)"
 
 # Backup WAN NAT (if enabled)
-# add chain=srcnat out-interface=ether1 action=masquerade comment="NAT - WAN2 (Backup)"
+:if ($enableDualWan = true) do={
+    /ip firewall nat
+    add chain=srcnat out-interface=$wan2Interface action=masquerade comment="NAT - WAN2 (Backup)"
+}
 
 # DNS forwarding
 add chain=dstnat protocol=udp dst-port=53 action=redirect to-ports=53 \
@@ -88,12 +156,12 @@ add chain=dstnat protocol=udp dst-port=53 action=redirect to-ports=53 \
 # PHASE 5: WIFI CONFIGURATION
 # ============================================================
 /interface wireless
-set wlan0 ssid="Bundle-WiFi-$(identity)" frequency=2.4GHz band=2ghz-onlyn \
+set wlan0 ssid=$wifiName frequency=2.4GHz band=2ghz-onlyn \
     tx-power=20 disabled=no
 
 /interface wireless security-profiles
 set default authentication-types=wpa2-psk unicast-ciphers=aes-ccm \
-    group-ciphers=aes-ccm wpa2-pre-shared-key="BundleWiFi2024" \
+    group-ciphers=aes-ccm wpa2-pre-shared-key=$wifiPassword \
     comment="Main WiFi Security"
 
 # ============================================================
@@ -102,11 +170,11 @@ set default authentication-types=wpa2-psk unicast-ciphers=aes-ccm \
 
 # Hotspot server on LAN bridge
 /ip hotspot
-add name=hotspot-bundle interface=bridge-local address-pool=dhcp-pool \
+add name=hotspot-bundle interface=$lanBridge address-pool=dhcp-pool \
     profile=default disabled=no
 
 /ip hotspot profile
-set default hotspot-address=192.168.100.1 login-by=http-chap,http-pap \
+set default hotspot-address=$lanGateway login-by=http-chap,http-pap \
     html-directory=hotspot http-cookie-lifetime=1d \
     smtp-server=0.0.0.0 dns-name=bundle.local
 
@@ -132,21 +200,35 @@ add name="unlimited"     rate-limit=50M/50M session-timeout=30d  keepalive-timeo
 # ============================================================
 # PHASE 8: FIREWALL - HARDENING & PROTECTION
 # ============================================================
+/ip firewall address-list
+add list=mgmt-allow address=192.168.100.0/24 comment="Trusted LAN management"
+add list=mgmt-allow address=$backendAllowedIp comment="Backend/API server public IP"
+add list=mgmt-allow address=$adminAllowedIp comment="Admin remote public IP"
+
 /ip firewall filter
 
 # INPUT chain (traffic to router itself)
 add chain=input action=accept connection-state=established,related comment="Accept established"
 add chain=input action=accept protocol=icmp comment="Accept ICMP (ping)"
-add chain=input action=accept in-interface=bridge-local comment="Accept LAN"
-add chain=input action=accept in-interface=ether1 comment="Accept loopback"
-add chain=input action=drop in-interface=ether2 comment="Drop WAN queries"
+add chain=input action=accept in-interface=$lanBridge comment="Accept LAN"
+add chain=input action=accept protocol=udp src-address-list=mgmt-allow in-interface=$wan1Interface dst-port=500,1701,4500 comment="Allow trusted L2TP/IPsec from WAN"
+add chain=input action=accept protocol=ipsec-esp src-address-list=mgmt-allow in-interface=$wan1Interface comment="Allow trusted IPsec ESP from WAN"
+add chain=input action=accept protocol=tcp src-address-list=mgmt-allow in-interface=$wan1Interface dst-port=$apiSslPort comment="Allow trusted backend API-SSL from WAN"
+:if ($remoteAccessMode = "basic") do={
+    /ip firewall filter
+    add chain=input action=accept protocol=tcp src-address-list=mgmt-allow in-interface=$wan1Interface dst-port=$remoteAdminPorts comment="Allow trusted direct admin access from WAN"
+}
+add chain=input action=drop in-interface=$wan1Interface comment="Drop WAN queries"
 add chain=input action=drop comment="Drop all other"
 
 # FORWARD chain (LAN to WAN routing)
 add chain=forward action=accept connection-state=established,related comment="Accept established"
 add chain=forward action=drop connection-state=invalid comment="Drop invalid"
-add chain=forward action=accept in-interface=bridge-local out-interface=ether2 comment="LAN→WAN1"
-# add chain=forward action=accept in-interface=bridge-local out-interface=ether1 comment="LAN→WAN2"
+add chain=forward action=accept in-interface=$lanBridge out-interface=$wan1Interface comment="LAN-to-WAN1"
+:if ($enableDualWan = true) do={
+    /ip firewall filter
+    add chain=forward action=accept in-interface=$lanBridge out-interface=$wan2Interface comment="LAN-to-WAN2"
+}
 add chain=forward action=drop comment="Drop other"
 
 # DOS protection
@@ -163,12 +245,52 @@ set servers=8.8.8.8,8.8.4.4 allow-remote-requests=yes cache-size=2048 cache-max-
 
 # Bind DNS to LAN interface for local resolution
 /ip dns static
-add name=bundle.local address=192.168.100.1
-add name=router.local address=192.168.100.1
+add name=bundle.local address=$lanGateway
+add name=router.local address=$lanGateway
 
 # ============================================================
 # PHASE 10: MONITORING & API INTEGRATION
 # ============================================================
+/ip cloud
+:if ($enableIpCloud = true) do={
+    set ddns-enabled=yes update-time=yes
+}
+
+/ip service
+set telnet disabled=yes
+set ftp disabled=yes
+set www disabled=yes
+set ssh disabled=no port=22 address=("192.168.100.0/24," . $adminAllowedIp)
+set api disabled=yes
+set api-ssl disabled=no port=8729 address=("192.168.100.0/24," . $backendAllowedIp) tls-version=only-1.2 certificate=none
+:if ($remoteAccessMode = "basic") do={
+    set winbox address=("192.168.100.0/24," . $backendAllowedIp . "," . $adminAllowedIp)
+    set www-ssl disabled=no address=("192.168.100.0/24," . $backendAllowedIp . "," . $adminAllowedIp) tls-version=only-1.2
+} else={
+    set winbox address="192.168.100.0/24"
+    set www-ssl disabled=no address="192.168.100.0/24" tls-version=only-1.2
+}
+
+# Optional L2TP/IPsec remote-access VPN
+/ppp profile
+:if ([print count where name="remote-vpn-profile"] = 0) do={
+    add name="remote-vpn-profile" local-address=$lanGateway remote-address=dhcp-pool use-encryption=required only-one=yes change-tcp-mss=yes
+}
+
+/interface l2tp-server server
+:if ($enableL2tpIpsec = true) do={
+    set enabled=yes use-ipsec=yes ipsec-secret=$l2tpIpsecSecret default-profile=remote-vpn-profile authentication=mschap2
+} else={
+    set enabled=no use-ipsec=yes ipsec-secret=$l2tpIpsecSecret default-profile=remote-vpn-profile authentication=mschap2
+}
+
+/ppp secret
+:if ([print count where name=$l2tpUser] = 0) do={
+    add name=$l2tpUser password=$l2tpPassword service=l2tp profile=remote-vpn-profile comment="Remote admin VPN user"
+} else={
+    set [find where name=$l2tpUser] password=$l2tpPassword service=l2tp profile=remote-vpn-profile
+}
+
 /system logging
 
 # Log hotspot activity
@@ -258,7 +380,7 @@ add name="check-bundle-expiry" policy=read,write,policy,test source={
 :if ([/queue tree print count] > 0) do={/queue tree remove [/queue tree find]}
 
 # Main queue for each WAN output
-add name="qos-primary" queue-type=pcq parent=ether2-DropTail packet-mark=no-mark priority=1
+add name="qos-primary" queue-type=pcq parent=global packet-mark=no-mark priority=1
 
 # Per-user throttling via simple queue (alternative method)
 # /queue simple
@@ -286,13 +408,22 @@ add name="task-backup-config" interval=6h on-event="/system backup save name=aut
 # Store metadata for webhook notifications to backend
 # ============================================================
 /interface ethernet
-set ether2 running=true comment="WAN1 - DHCP from ISP"
-# set ether1 running=true comment="WAN2 - Backup LTE (if dual-wan)"
+set ether1 comment="WAN1 - DHCP from ISP"
+set ether2 comment="LAN - Laptop setup port"
+set ether3 comment="LAN - Client port 1"
+set ether4 comment="LAN - Client port 2"
+set ether5 comment="LAN - Client port 3"
 
 :log info ("MikroTik Bundle Router initialization COMPLETE")
 :log info ("Hotspot available at: http://192.168.100.1:8091 (or your WAN IP)")
 :log info ("Management: http://192.168.100.1 (WebFig)")
-:log info ("API Port: 8728 (RouterOS API)")
+:if ($enableIpCloud = true) do={ :log info ("IP Cloud DDNS enabled - check /ip cloud print for your *.sn.mynetname.net hostname") }
+:log info ("Remote access mode: $remoteAccessMode")
+:log info ("API Port: 8729 (RouterOS API-SSL)")
+:log info ("WinBox Port: 8291")
+:log info ("SSH Port: 22")
+:if ($enableDualWan = true) do={ :log info ("Dual-WAN mode enabled: primary=$wan1Interface backup=$wan2Interface") }
+:if ($enableL2tpIpsec = true) do={ :log info ("L2TP/IPsec VPN enabled for trusted remote clients") }
 
 # ============================================================
 # OPTIONAL: MANUAL DATA CAP TEST
@@ -305,9 +436,18 @@ set ether2 running=true comment="WAN1 - DHCP from ISP"
 # ============================================================
 # 1. Change default WiFi password in /interface wireless
 # 2. Update DNS servers if needed: /ip dns set servers=YOUR_DNS
-# 3. Enable dual-WAN by uncommenting WAN2 sections
-# 4. Test hotspot: http://YOUR_ROUTER_IP:8091
-# 5. Monitor logs: /log print tail=20
-# 6. Check active sessions: /ip hotspot active print
-# 7. Integrated with backend API — users created via Node.js will appear here
+# 3. Enable dual-WAN by setting enableDualWan=true
+# 4. Change wan1Interface if your ISP is not connected on ether1
+# 5. Set enableDualWan=true if you want automatic backup internet on wan2Interface
+# 6. Replace 203.0.113.10 with your backend server IP or VPN subnet
+# 7. Replace 198.51.100.20 with your own trusted admin public IP
+# 8. Use remoteAccessMode="basic" for direct trusted-IP admin access
+# 9. Use remoteAccessMode="vpn-first" to keep WinBox/WebFig/SSH off the WAN and rely on VPN
+# 10. Check your DDNS name using: /ip cloud print
+# 11. Enable L2TP/IPsec by setting enableL2tpIpsec to true near the top of this script
+# 12. Back to Home (BTH) is not configured here; use it only on compatible RouterOS devices/apps
+# 13. Test hotspot: http://YOUR_ROUTER_IP:8091
+# 14. Monitor logs: /log print tail=20
+# 15. Check active sessions: /ip hotspot active print
+# 16. Integrated with backend API - users created via Node.js will appear here
 # ============================================================

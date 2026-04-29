@@ -139,7 +139,7 @@ function App() {
   const fetchBundles = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://192.168.0.102:5000/api/bundles', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://isp.zetahub.africa/api'}/bundles`, {
         headers: {
           'Content-Type': 'application/json',
         }
@@ -186,7 +186,7 @@ function App() {
     const detectedProvider = detectProvider(phoneNumber);
 
     try {
-      const response = await fetch('http://192.168.0.102:5000/api/payment/initiate-stk', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://isp.zetahub.africa/api'}/payment/initiate-stk`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

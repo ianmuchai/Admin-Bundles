@@ -36,7 +36,7 @@ export default function Packages() {
       if (activeTab !== "All") params.type = activeTab;
       if (searchQuery.trim()) params.search = searchQuery.trim();
       const { data } = await packagesAPI.list(params);
-      setPackages(data.packages || data.data || (Array.isArray(data) ? data : []));
+      setPackages(data.packages || data || [])
     } catch (err) {
       setError(err.message || "Failed to load packages");
     } finally {
@@ -58,50 +58,41 @@ export default function Packages() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const resetForm = () => {
-    setFormData({ name: "", type: "Fixed (PPPoE/Static/DHCP)", uploadSpeed: "", downloadSpeed: "", burst: false, period: "", unit: "Hour(s)", price: "" });
+  const resetForm = () => ({
+    name: "",
+    type: "Fixed (PPPoE/Static/DHCP)",
+    uploadSpeed: "",
+    downloadSpeed: "",
+    burst: false,
+    period: "",
+    unit: "Hour(s)",
+    price: "",
+  });
+
+  const handleOpenCreate = () => {
     setEditingPackage(null);
+    setFormData(resetForm());
+    setIsDrawerOpen(true);
   };
 
-  const openEditDrawer = (pkg) => {
+  const handleOpenEdit = (pkg) => {
     setEditingPackage(pkg);
     setFormData({
       name: pkg.name,
       type: pkg.type,
-      uploadSpeed: pkg.uploadSpeed || "",
-      downloadSpeed: pkg.downloadSpeed || "",
-      burst: pkg.burst || false,
-      period: pkg.period || "",
-      unit: pkg.unit || "Hour(s)",
-      price: pkg.price || "",
+      uploadSpeed: pkg.upload_speed,
+      downloadSpeed: pkg.download_speed,
+      burst: !!pkg.burst,
+      period: pkg.period,
+      unit: pkg.unit,
+      price: pkg.price,
     });
     setIsDrawerOpen(true);
   };
 
-  const handleUpdatePackage = async () => {
-    if (!formData.name.trim() || !formData.uploadSpeed || !formData.downloadSpeed || !formData.period || !formData.price) {
-      alert("Please fill in all required fields");
-      return;
-    }
-    try {
-      await packagesAPI.update(editingPackage.id, {
-        name: formData.name,
-        type: formData.type,
-        upload_speed: parseFloat(formData.uploadSpeed),
-        download_speed: parseFloat(formData.downloadSpeed),
-        burst: formData.burst,
-        period: parseFloat(formData.period),
-        unit: formData.unit,
-        price: parseFloat(formData.price),
-      });
-      await Promise.all([fetchPackages(), fetchCounts()]);
-      resetForm();
-      setIsDrawerOpen(false);
-      setSuccessMessage(`Package "${formData.name}" updated successfully!`);
-      setTimeout(() => setSuccessMessage(""), 3000);
-    } catch (err) {
-      alert(err.message || "Failed to update package");
-    }
+  const handleCloseDrawer = () => {
+    setIsDrawerOpen(false);
+    setEditingPackage(null);
   };
 
   const handleDeletePackage = async (pkg) => {
@@ -130,24 +121,32 @@ export default function Packages() {
       return;
     }
 
+    const payload = {
+      name: formData.name,
+      type: formData.type,
+      upload_speed: parseFloat(formData.uploadSpeed),
+      download_speed: parseFloat(formData.downloadSpeed),
+      burst: formData.burst,
+      period: parseFloat(formData.period),
+      unit: formData.unit,
+      price: parseFloat(formData.price),
+    };
+
     try {
-      await packagesAPI.create({
-        name: formData.name,
-        type: formData.type,
-        upload_speed: parseFloat(formData.uploadSpeed),
-        download_speed: parseFloat(formData.downloadSpeed),
-        burst: formData.burst,
-        period: parseFloat(formData.period),
-        unit: formData.unit,
-        price: parseFloat(formData.price),
-      });
+      if (editingPackage) {
+        await packagesAPI.update(editingPackage.id, payload);
+      } else {
+        await packagesAPI.create(payload);
+      }
       await Promise.all([fetchPackages(), fetchCounts()]);
-      resetForm();
-      setIsDrawerOpen(false);
-      setSuccessMessage(`Package "${formData.name}" created successfully!`);
+      const verb = editingPackage ? "updated" : "created";
+      setSuccessMessage(`Package "${formData.name}" ${verb} successfully!`);
       setTimeout(() => setSuccessMessage(""), 3000);
+      setFormData(resetForm());
+      setEditingPackage(null);
+      setIsDrawerOpen(false);
     } catch (err) {
-      alert(err.message || "Failed to create package");
+      alert(err.message || `Failed to ${editingPackage ? "update" : "create"} package`);
     }
   };
 
@@ -168,7 +167,7 @@ export default function Packages() {
           
           <div className="flex flex-wrap gap-3">
             <button 
-              onClick={() => { resetForm(); setIsDrawerOpen(true); }}
+              onClick={handleOpenCreate}
               className="flex items-center gap-2 bg-[#009DFF] hover:bg-[#0077cc] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-lg shadow-blue-500/20"
             >
               <Package size={16} /> Create Package
@@ -217,17 +216,17 @@ export default function Packages() {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan="6" className="py-24 text-center text-gray-400">Loading...</td>
+                      <td colSpan="7" className="py-24 text-center text-gray-400">Loading...</td>
                     </tr>
                   ) : filteredPackages.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="py-24 text-center">
+                      <td colSpan="7" className="py-24 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <Package size={40} className="text-gray-300 dark:text-gray-700 mb-4" />
                           <h3 className="text-lg font-bold dark:text-white">No packages found</h3>
                           <p className="text-gray-500 text-sm mb-6">Create your first package to start offering internet services.</p>
                           <button 
-                            onClick={() => setIsDrawerOpen(true)}
+                            onClick={handleOpenCreate}
                             className="bg-[#009DFF] text-white px-6 py-2 rounded-lg font-bold shadow-lg shadow-blue-500/20"
                           >
                             + Create Package
@@ -240,7 +239,7 @@ export default function Packages() {
                       <tr key={pkg.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
                         <td className="px-6 py-4 font-medium text-gray-800 dark:text-gray-200">{pkg.name}</td>
                         <td className="px-6 py-4 text-gray-600 dark:text-gray-400">Kshs {pkg.price}</td>
-                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400">{pkg.uploadSpeed}/{pkg.downloadSpeed} Mbps</td>
+                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400">{pkg.upload_speed}/{pkg.download_speed} Mbps</td>
                         <td className="px-6 py-4 text-gray-600 dark:text-gray-400">{pkg.period} {pkg.unit}</td>
                         <td className="px-6 py-4">
                           <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${
@@ -260,19 +259,19 @@ export default function Packages() {
                             {pkg.enabled ? "Yes" : "No"}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-center">
+                        <td className="px-6 py-4">
                           <div className="flex items-center justify-center gap-2">
                             <button
-                              onClick={() => openEditDrawer(pkg)}
+                              onClick={() => handleOpenEdit(pkg)}
+                              className="p-1.5 rounded-lg text-gray-500 hover:text-[#009DFF] hover:bg-[#009DFF]/10 transition-colors"
                               title="Edit package"
-                              className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                             >
                               <Pencil size={15} />
                             </button>
                             <button
                               onClick={() => handleDeletePackage(pkg)}
+                              className="p-1.5 rounded-lg text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                               title="Delete package"
-                              className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                             >
                               <Trash2 size={15} />
                             </button>
@@ -295,7 +294,7 @@ export default function Packages() {
                   <h3 className="text-base font-bold dark:text-white">No packages found</h3>
                   <p className="text-gray-500 text-xs mb-4">Create your first package to start offering internet services.</p>
                   <button 
-                    onClick={() => setIsDrawerOpen(true)}
+                    onClick={handleOpenCreate}
                     className="bg-[#009DFF] text-white px-4 py-2 rounded-lg text-sm font-bold shadow-lg shadow-blue-500/20"
                   >
                     + Create Package
@@ -310,25 +309,35 @@ export default function Packages() {
                         <div className="text-xs text-gray-500 dark:text-gray-400">Kshs {pkg.price}</div>
                       </div>
                       <div className="flex items-center gap-1">
-                        <button onClick={() => openEditDrawer(pkg)} className="p-1 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"><Pencil size={13} /></button>
-                        <button onClick={() => handleDeletePackage(pkg)} className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"><Trash2 size={13} /></button>
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                          pkg.type === "PPPOE"
+                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                            : pkg.type === "Hotspot"
+                            ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                            : pkg.type === "Free Trial"
+                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                            : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
+                        }`}>
+                          {pkg.type}
+                        </span>
+                        <button
+                          onClick={() => handleOpenEdit(pkg)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-[#009DFF] hover:bg-[#009DFF]/10 transition-colors"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          onClick={() => handleDeletePackage(pkg)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                        >
+                          <Trash2 size={13} />
+                        </button>
                       </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                        pkg.type === "PPPOE"
-                          ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                          : pkg.type === "Hotspot"
-                          ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
-                          : pkg.type === "Free Trial"
-                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                          : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
-                      }`}>
-                        {pkg.type}
-                      </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div>
                         <span className="text-gray-500 dark:text-gray-400">Speed:</span>
-                        <div className="text-gray-700 dark:text-gray-300 font-medium">{pkg.uploadSpeed}/{pkg.downloadSpeed} Mbps</div>
+                        <div className="text-gray-700 dark:text-gray-300 font-medium">{pkg.upload_speed}/{pkg.download_speed} Mbps</div>
                       </div>
                       <div>
                         <span className="text-gray-500 dark:text-gray-400">Period:</span>
@@ -367,14 +376,14 @@ export default function Packages() {
 
       {/* --- NEW PACKAGE DRAWER --- */}
       {isDrawerOpen && (
-        <div className="fixed inset-0 bg-black/40 z-40 animate-in fade-in" onClick={() => { setIsDrawerOpen(false); resetForm(); }} />
+        <div className="fixed inset-0 bg-black/40 z-40 animate-in fade-in" onClick={handleCloseDrawer} />
       )}
 
       <div className={`fixed top-0 right-0 h-full w-full sm:w-96 md:max-w-sm bg-white dark:bg-[#000a00] z-50 shadow-2xl transform transition-transform duration-300 ease-in-out ${isDrawerOpen ? "translate-x-0" : "translate-x-full"}`}>
         <div className="flex flex-col h-full">
           <div className="p-3 sm:p-4 md:p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
             <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white">{editingPackage ? "Edit Package" : "New Package"}</h2>
-            <button onClick={() => { setIsDrawerOpen(false); resetForm(); }} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full">
+            <button onClick={handleCloseDrawer} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full">
               <X size={20} className="text-gray-500" />
             </button>
           </div>
@@ -393,7 +402,7 @@ export default function Packages() {
                 <select 
                   value={formData.type}
                   onChange={(e) => handleFormChange("type", e.target.value)}
-                  className="w-full appearance-none bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg p-2 sm:p-2.5 pr-10 text-xs sm:text-sm dark:text-white cursor-pointer"
+                  className="w-full appearance-none bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg p-2 sm:p-2.5 text-xs sm:text-sm dark:text-white"
                 >
                   <option>Fixed (PPPoE/Static/DHCP)</option>
                   <option>Hotspot</option>
@@ -444,7 +453,7 @@ export default function Packages() {
                   <select 
                     value={formData.unit}
                     onChange={(e) => handleFormChange("unit", e.target.value)}
-                    className="w-full appearance-none bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg p-2 sm:p-2.5 pr-10 text-xs sm:text-sm dark:text-white cursor-pointer"
+                    className="w-full appearance-none bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg p-2 sm:p-2.5 text-xs sm:text-sm dark:text-white"
                   >
                     <option>Hour(s)</option>
                     <option>Day(s)</option>
@@ -466,16 +475,16 @@ export default function Packages() {
 
           <div className="p-3 sm:p-4 md:p-6 border-t border-gray-100 dark:border-gray-800 grid grid-cols-2 gap-2 sm:gap-3 md:gap-4">
             <button 
-              onClick={() => { setIsDrawerOpen(false); resetForm(); }} 
+              onClick={handleCloseDrawer} 
               className="py-2 sm:py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 transition-all"
             >
               Cancel
             </button>
             <button 
-              onClick={editingPackage ? handleUpdatePackage : handleCreatePackage}
+              onClick={handleCreatePackage}
               className="py-2 sm:py-2.5 rounded-lg bg-[#009DFF] text-white text-xs sm:text-sm font-bold hover:bg-[#0077cc] shadow-lg shadow-blue-500/20 transition-all"
             >
-              {editingPackage ? "Save Changes" : "Create"}
+              {editingPackage ? "Update" : "Create"}
             </button>
           </div>
         </div>
